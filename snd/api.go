@@ -157,14 +157,9 @@ func (c *Client) Resolve(url string) (string, error) {
 		return "", fmt.Errorf("invalid content-type in response: %v", mediaType)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("couldn't read body: %v", err)
-	}
-	fmt.Println("got redirect, yay! =>", string(body))
-
 	var resolveResp ResolveResponse
-	if err = json.Unmarshal(body, &resolveResp); err != nil {
+	dec := json.NewDecoder(resp.Body)
+	if err = dec.Decode(&resolveResp); err != nil {
 		return "", fmt.Errorf("didn't understand reponse, %v", err)
 	}
 
