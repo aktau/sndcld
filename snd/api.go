@@ -164,8 +164,7 @@ func (c *Client) Resolve(url string) (string, error) {
 	fmt.Println("got redirect, yay! =>", string(body))
 
 	var resolveResp ResolveResponse
-	err = json.Unmarshal(body, &resolveResp)
-	if err != nil {
+	if err = json.Unmarshal(body, &resolveResp); err != nil {
 		return "", fmt.Errorf("didn't understand reponse, %v", err)
 	}
 
