@@ -1,11 +1,9 @@
 package snd
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -15,11 +13,6 @@ const (
 
 type Client struct {
 	Id string
-}
-
-type ResolveResponse struct {
-	Status   string `json:"status"`
-	Location string `json:"location"`
 }
 
 // {
@@ -121,12 +114,14 @@ type Sound struct {
 func (c *Client) Resolve(url string) (string, error) {
 	uri := fmt.Sprintf("/resolve.json?url=%s&client_id=%s", url, c.Id)
 
-	// resp, err := http.Get(BASE_URL + uri)
 	req, err := http.NewRequest("GET", BASE_URL+uri, nil)
 	if err != nil {
 		return "", err
 	}
 
+	// we use the default roundtripper instead of http.Get() because
+	// http.Get() will follow redirects automatically while we want to just
+	// fetch the "Location" header of the redirect.
 	resp, err := http.DefaultTransport.RoundTrip(req)
 	if err != nil {
 		return "", err
@@ -152,18 +147,7 @@ func (c *Client) Resolve(url string) (string, error) {
 		}
 	}
 
-	mediaType := resp.Header.Get("Content-Type")
-	if !strings.HasPrefix(mediaType, "application/json") {
-		return "", fmt.Errorf("invalid content-type in response: %v", mediaType)
-	}
-
-	var resolveResp ResolveResponse
-	dec := json.NewDecoder(resp.Body)
-	if err = dec.Decode(&resolveResp); err != nil {
-		return "", fmt.Errorf("didn't understand reponse, %v", err)
-	}
-
-	return resolveResp.Location, nil
+	return resp.Header.Get("Location"), nil
 }
 
 func (c *Client) GetSound(url string) (*Sound, error) {
