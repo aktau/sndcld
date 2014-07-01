@@ -85,5 +85,5 @@ func (s *Sound) Filename() string {
 	// TODO: the user is not always the artist, find a better heuristic...
 	artist := strings.Replace(s.User.Username, "/", "-", -1)
 	title := strings.Replace(s.Title, "/", "-", -1)
-	return artist + " - " + title + ".mp3"
+	return artist + " - " + title
 }

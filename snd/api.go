@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 )
 
 const (
@@ -96,7 +98,22 @@ func (c *Client) DownloadSound(sound *Sound) error {
 	}
 	defer resp.Body.Close()
 
-	f, err := os.Create(sound.Filename())
+	h := resp.Header
+	mimeType, ext, err := parseFiletype(h.Get("Content-Type"), h.Get("Content-Disposition"))
+	if err != nil {
+		// if there's still nothing, assume it's mp3
+		if mimeType == "" {
+			mimeType = "audio/mpeg"
+		}
+
+		if ext == "" {
+			ext = ".mp3"
+		}
+	}
+
+	fname := sound.Filename() + ext
+
+	f, err := os.Create(fname)
 	if err != nil {
 		return err
 	}
@@ -104,7 +121,102 @@ func (c *Client) DownloadSound(sound *Sound) error {
 
 	// stream the http response to the file (check if chunked encoding
 	// doesn't mess with this)
-	io.Copy(f, resp.Body)
+	n, err := io.Copy(f, resp.Body)
+	if err != nil {
+		return err
+	}
+	fmt.Println("wrote", n, "bytes to file", fname)
 
-	return nil
+	return err
+}
+
+// if you have the codec, prefer that to dermine the extension, because it's
+// less ambiguous (MIME audio/ogg can be both Vorbis and Opus).
+var codecToExt = map[string]string{
+	"mp3":    ".mp3",
+	"flac":   ".flac",
+	"wave":   ".wav",
+	"opus":   ".opus",
+	"vorbis": ".ogg",
+}
+
+// if you don't have a codec, you can use the MIME type to guess an
+// extension
+var mimeToExt = map[string]string{
+	"audio/x-wav": ".wav",
+	"audio/mpeg":  ".mp3",
+	"audio/mpeg3": ".mp3",
+	"audio/mp3":   ".mp3",
+	"audio/flac":  ".flac",
+	"audio/ogg":   ".ogg",
+}
+
+// parseFiletype - return a MIME type and suggest an extension
+//
+// Based on the values usually delivered via the Content-Type and
+// Content-Disposition HTTP headers. Note: the extension contains the
+// starting dot.
+func parseFiletype(contentType, contentDisposition string) (mimeType string, ext string, err error) {
+	defer func() {
+		// return an error if either the mime type or the extension couldn't
+		// be determined after a best effort
+		if mimeType == "" || ext == "" {
+			err = fmt.Errorf("could not derive MIME type and/or extension from %v and %v",
+				contentType, contentDisposition)
+		}
+	}()
+
+	mimeType, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		// couldn't parse, will have to derive from the file extension
+		fmt.Println("could not parse Content-Type:", contentType)
+	}
+	codec := params["codecs"]
+	fmt.Printf("Header specified: MIME = '%v', codec = '%v'\n", mimeType, codec)
+
+	// copy the extension of the original file to the new file (later we can
+	// do MIME-type based deduction should there be format with multiple
+	// extensions and we want to "normalize").
+	_, params, err = mime.ParseMediaType(contentDisposition)
+	if err != nil {
+		fmt.Println("could not parse Content-Disposition", contentDisposition)
+	}
+	origName := params["filename"]
+	fmt.Printf("Header specified: orig. name: '%v'\n", origName)
+
+	ext = determineExtension(origName, codec, mimeType)
+
+	// if we couldn't parse or find the mimetype, decide it based on the
+	// file extension (if possible)
+	if mimeType == "" && ext != "" {
+		guessMime := mime.TypeByExtension(ext)
+		mimeType, _, _ = mime.ParseMediaType(guessMime)
+	}
+
+	return
+}
+
+// determineExtension - try to determine the best extension of the file
+//
+// The decision tree:
+// 1. the extension of the file as suggested by soundcloud (as found in
+//    the Content-Disposition header)
+// 2. the extension usually associated with the codec (if the codec was
+//    found)
+// 3. the extension usually associated with the MIME type (of the MIME
+//    type was found)
+func determineExtension(origName, codec, mimeType string) string {
+	if ext := filepath.Ext(origName); ext != "" {
+		return ext
+	}
+
+	if ext, ok := codecToExt[codec]; ok {
+		return ext
+	}
+
+	if ext, ok := mimeToExt[mimeType]; ok {
+		return ext
+	}
+
+	return ""
 }
