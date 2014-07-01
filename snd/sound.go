@@ -83,7 +83,32 @@ type Sound struct {
 
 func (s *Sound) Filename() string {
 	// TODO: the user is not always the artist, find a better heuristic...
-	artist := strings.Replace(s.User.Username, "/", "-", -1)
 	title := strings.Replace(s.Title, "/", "-", -1)
+	artist := strings.Replace(s.User.Username, "/", "-", -1)
+
+	// strip the string "free download" from the title if it is found
+	title = strings.Replace(title, "free download", "", -1)
+
+	// strip some special characters
+	title = stripRunes(title, "*")
+
+	// now there's possibly some trailing space
+	title = strings.TrimSpace(title)
+
+	// don't prepend the artist name if the title already starts with the
+	// artist name (some uploaders do this)
+	if strings.HasPrefix(title, artist) {
+		return title
+	}
+
 	return artist + " - " + title
+}
+
+func stripRunes(str, chr string) string {
+	return strings.Map(func(r rune) rune {
+		if strings.IndexRune(chr, r) < 0 {
+			return r
+		}
+		return -1
+	}, str)
 }
