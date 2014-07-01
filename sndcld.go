@@ -25,7 +25,9 @@ func main() {
 	if err != nil {
 		fmt.Printf("couldn't fetch sound %s (resolved: %s) metadata: %v\n",
 			soundUrl, url, err)
+		os.Exit(1)
 	}
-
 	fmt.Printf("got sound %s -> %s, %+v\n", soundUrl, url, sound)
+
+	client.DownloadSound(sound)
 }

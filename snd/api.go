@@ -3,8 +3,11 @@ package snd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"os"
 )
 
 const (
@@ -69,4 +72,39 @@ func (c *Client) GetSound(url string) (*Sound, error) {
 	}
 
 	return &sound, nil
+}
+
+func (c *Client) DownloadSound(sound *Sound) error {
+	fmt.Println("Attempting to download", sound.Title)
+	var u string
+	if sound.Downloadable {
+		fmt.Println("\tdownload version supported, this is probably the highest-quality version", sound.DownloadUrl)
+		u = sound.DownloadUrl
+	} else {
+		fmt.Println("\tno download version, streaming instead:", sound.StreamUrl)
+		u = sound.StreamUrl
+	}
+
+	v := url.Values{}
+	v.Add("client_id", c.Id)
+	u = u + "?" + v.Encode()
+
+	fmt.Println("GET -> ", u)
+	resp, err := http.Get(u)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	f, err := os.Create(sound.Filename())
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// stream the http response to the file (check if chunked encoding
+	// doesn't mess with this)
+	io.Copy(f, resp.Body)
+
+	return nil
 }
