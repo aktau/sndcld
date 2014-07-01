@@ -1,5 +1,7 @@
 package snd
 
+import "strings"
+
 // {
 // 	"kind": "track",
 // 	"id": 152514285,
@@ -61,6 +63,7 @@ type Sound struct {
 	Permalink           string `json:"permalink"`
 	PermalinkUrl        string `json:"permalink_url"`
 	StreamUrl           string `json:"stream_url"`
+	DownloadUrl         string `json:"download_url"`
 	AttachmentsUri      string `json:"attachments_uri"`
 	State               string `json:"state"`   // could be "finished", ...
 	Sharing             string `json:"sharing"` // could be "public"
@@ -76,4 +79,11 @@ type Sound struct {
 
 	// user sub-object
 	User User `json:"user"`
+}
+
+func (s *Sound) Filename() string {
+	// TODO: the user is not always the artist, find a better heuristic...
+	artist := strings.Replace(s.User.Username, "/", "-", -1)
+	title := strings.Replace(s.Title, "/", "-", -1)
+	return artist + " - " + title + ".mp3"
 }
