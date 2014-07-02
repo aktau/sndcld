@@ -3,12 +3,10 @@ package snd
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"mime"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 )
 
@@ -76,8 +74,9 @@ func (c *Client) GetSound(url string) (*Sound, error) {
 	return &sound, nil
 }
 
-func (c *Client) DownloadSound(sound *Sound) (string, error) {
+func (c *Client) DownloadSound(sound *Sound) (*http.Response, error) {
 	fmt.Println("Attempting to download", sound.Title)
+
 	var u string
 	if sound.Downloadable {
 		fmt.Println("\tdownload version supported, this is probably the highest-quality version", sound.DownloadUrl)
@@ -93,41 +92,7 @@ func (c *Client) DownloadSound(sound *Sound) (string, error) {
 
 	fmt.Println("GET -> ", u)
 	resp, err := http.Get(u)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	h := resp.Header
-	mimeType, ext, err := parseFiletype(h.Get("Content-Type"), h.Get("Content-Disposition"))
-	if err != nil {
-		// if there's still nothing, assume it's mp3
-		if mimeType == "" {
-			mimeType = "audio/mpeg"
-		}
-
-		if ext == "" {
-			ext = ".mp3"
-		}
-	}
-
-	fname := sound.Filename() + ext
-
-	f, err := os.Create(fname)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	// stream the http response to the file (check if chunked encoding
-	// doesn't mess with this)
-	n, err := io.Copy(f, resp.Body)
-	if err != nil {
-		return "", err
-	}
-	fmt.Println("wrote", n, "bytes to file", fname)
-
-	return fname, err
+	return resp, err
 }
 
 // if you have the codec, prefer that to dermine the extension, because it's
@@ -151,12 +116,12 @@ var mimeToExt = map[string]string{
 	"audio/ogg":   ".ogg",
 }
 
-// parseFiletype - return a MIME type and suggest an extension
+// ParseFiletype - return a MIME type and suggest an extension
 //
 // Based on the values usually delivered via the Content-Type and
 // Content-Disposition HTTP headers. Note: the extension contains the
 // starting dot.
-func parseFiletype(contentType, contentDisposition string) (mimeType string, ext string, err error) {
+func ParseFiletype(contentType, contentDisposition string) (mimeType string, ext string, err error) {
 	defer func() {
 		// return an error if either the mime type or the extension couldn't
 		// be determined after a best effort

@@ -3,9 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/aktau/sndcld/snd"
+	"github.com/cheggaaa/pb"
 )
 
 var (
@@ -54,9 +59,16 @@ func main() {
 	}
 	fmt.Printf("got sound %s -> %s, %+v\n", soundUrl, url, sound)
 
-	fname, err := client.DownloadSound(sound)
+	resp, err := client.DownloadSound(sound)
 	if err != nil {
 		fmt.Println("couldn't download sound:", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	fname, err := storeSound(sound, resp)
+	if err != nil {
+		fmt.Println("couldn't store sound locally:", err)
 		os.Exit(1)
 	}
 
@@ -64,4 +76,38 @@ func main() {
 		fmt.Println("couldn't tag file:", err)
 		os.Exit(1)
 	}
+}
+
+func storeSound(sound *snd.Sound, resp *http.Response) (string, error) {
+	h := resp.Header
+	_, ext, err := snd.ParseFiletype(h.Get("Content-Type"), h.Get("Content-Disposition"))
+	if err != nil {
+		// if there's still nothing, assume it's mp3
+		ext = ".mp3"
+	}
+
+	fname := sound.Filename() + ext
+
+	f, err := os.Create(fname)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	// create progressbar
+	nbytes, _ := strconv.Atoi(h.Get("Content-Length"))
+
+	bar := pb.New(nbytes).SetUnits(pb.U_BYTES).SetRefreshRate(time.Millisecond * 10)
+	bar.ShowSpeed = true
+	bar.Start()
+	defer bar.Finish()
+
+	// create multi writer, write to the progress bar and the file at the
+	// same time.
+	writer := io.MultiWriter(f, bar)
+
+	// stream the http response to the file (check if chunked encoding
+	// doesn't mess with this)
+	_, err = io.Copy(writer, resp.Body)
+	return fname, err
 }
