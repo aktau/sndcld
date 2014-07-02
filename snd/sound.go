@@ -1,6 +1,14 @@
 package snd
 
-import "strings"
+import (
+	"errors"
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"github.com/mikkyang/id3-go"
+)
 
 // {
 // 	"kind": "track",
@@ -83,25 +91,73 @@ type Sound struct {
 
 func (s *Sound) Filename() string {
 	// TODO: the user is not always the artist, find a better heuristic...
-	title := strings.Replace(s.Title, "/", "-", -1)
 	artist := strings.Replace(s.User.Username, "/", "-", -1)
 
-	// strip the string "free download" from the title if it is found
-	title = strings.Replace(title, "free download", "", -1)
+	return artist + " - " + s.NormalizedTitle()
+}
+
+var cutExpressions = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)[\(\s]*free\s*downloads?[\)\s]*`),
+}
+
+// NormalizedTitle - try to clean up the title as returned by the API
+func (s *Sound) NormalizedTitle() string {
+	title := s.Title
+
+	// sometimes the given title includes the artist's name in the
+	// beginning, usually this is wrong (unless it's a self-titled record),
+	// so let's avoid that
+	if strings.HasPrefix(title, s.User.Username) {
+		title = title[len(s.User.Username):]
+	}
+
+	title = strings.Replace(title, "/", "-", -1)
 
 	// strip some special characters
 	title = stripRunes(title, "*")
 
-	// now there's possibly some trailing space
-	title = strings.TrimSpace(title)
-
-	// don't prepend the artist name if the title already starts with the
-	// artist name (some uploaders do this)
-	if strings.HasPrefix(title, artist) {
-		return title
+	// strip useless annotations in the title (such as "free download")
+	for _, re := range cutExpressions {
+		title = re.ReplaceAllLiteralString(title, "")
 	}
 
-	return artist + " - " + title
+	// now there's possibly some trailing and leading symbols we don't want
+	return strings.Trim(title, " \t-")
+}
+
+// CompleteTags - writes the Sound's meta information to file fname as tags
+//
+// Does not overwrite existing information (assumes a field is already
+// properly tagged if it exists).
+//
+// Will return an error if the format is unrecognized or something goes
+// wrong while opening the file.
+func (s *Sound) CompleteTags(fname string) error {
+	if filepath.Ext(fname) != ".mp3" {
+		return errors.New("unsupported file format for tagging")
+	}
+
+	file, err := id3.Open(fname)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if prevArtist := file.Artist(); prevArtist != "" {
+		fmt.Println(fname, "already had an artist id3 tag:", prevArtist)
+	} else {
+		fmt.Println(fname, "setting artist:", s.User.Username)
+		file.SetArtist(s.User.Username)
+	}
+
+	if prevTitle := file.Title(); prevTitle != "" {
+		fmt.Println(fname, "already had a title id3 tag:", prevTitle)
+	} else {
+		fmt.Println(fname, "setting title:", s.NormalizedTitle())
+		file.SetTitle(s.NormalizedTitle())
+	}
+
+	return nil
 }
 
 func stripRunes(str, chr string) string {

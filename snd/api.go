@@ -76,7 +76,7 @@ func (c *Client) GetSound(url string) (*Sound, error) {
 	return &sound, nil
 }
 
-func (c *Client) DownloadSound(sound *Sound) error {
+func (c *Client) DownloadSound(sound *Sound) (string, error) {
 	fmt.Println("Attempting to download", sound.Title)
 	var u string
 	if sound.Downloadable {
@@ -94,7 +94,7 @@ func (c *Client) DownloadSound(sound *Sound) error {
 	fmt.Println("GET -> ", u)
 	resp, err := http.Get(u)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 
@@ -115,7 +115,7 @@ func (c *Client) DownloadSound(sound *Sound) error {
 
 	f, err := os.Create(fname)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer f.Close()
 
@@ -123,11 +123,11 @@ func (c *Client) DownloadSound(sound *Sound) error {
 	// doesn't mess with this)
 	n, err := io.Copy(f, resp.Body)
 	if err != nil {
-		return err
+		return "", err
 	}
 	fmt.Println("wrote", n, "bytes to file", fname)
 
-	return err
+	return fname, err
 }
 
 // if you have the codec, prefer that to dermine the extension, because it's

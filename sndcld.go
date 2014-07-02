@@ -54,5 +54,14 @@ func main() {
 	}
 	fmt.Printf("got sound %s -> %s, %+v\n", soundUrl, url, sound)
 
-	client.DownloadSound(sound)
+	fname, err := client.DownloadSound(sound)
+	if err != nil {
+		fmt.Println("couldn't download sound:", err)
+		os.Exit(1)
+	}
+
+	if err := sound.CompleteTags(fname); err != nil {
+		fmt.Println("couldn't tag file:", err)
+		os.Exit(1)
+	}
 }
