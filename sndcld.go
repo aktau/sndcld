@@ -15,6 +15,7 @@ import (
 
 var (
 	help = flag.Bool("help", false, "print help")
+	tag  = flag.String("tag", "", "tag a file with the information of <url>")
 )
 
 func init() {
@@ -23,6 +24,7 @@ func init() {
 
 func usage() {
 	fmt.Println("Usage: sndcld [-v] <url-of-track>")
+	fmt.Println("       sndcld -tag <filename-of-track> <url-of-track>")
 	os.Exit(0)
 }
 
@@ -59,6 +61,25 @@ func main() {
 	}
 	fmt.Printf("got sound %s -> %s, %+v\n", soundUrl, url, sound)
 
+	if *tag != "" {
+		// just tag the file, assume it's already downloaded
+		tagfile(&client, sound, *tag)
+	} else {
+		// download and tag
+		fname := download(&client, sound)
+		tagfile(&client, sound, fname)
+	}
+
+}
+
+func tagfile(client *snd.Client, sound *snd.Sound, fname string) {
+	if err := sound.CompleteTags(fname); err != nil {
+		fmt.Println("couldn't tag file:", err)
+		os.Exit(1)
+	}
+}
+
+func download(client *snd.Client, sound *snd.Sound) string {
 	resp, err := client.DownloadSound(sound)
 	if err != nil {
 		fmt.Println("couldn't download sound:", err)
@@ -72,10 +93,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := sound.CompleteTags(fname); err != nil {
-		fmt.Println("couldn't tag file:", err)
-		os.Exit(1)
-	}
+	return fname
 }
 
 func storeSound(sound *snd.Sound, resp *http.Response) (string, error) {
