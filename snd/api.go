@@ -133,8 +133,7 @@ func ParseFiletype(contentType, contentDisposition string) (mimeType string, ext
 
 	mimeType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		// couldn't parse, will have to derive from the file extension
-		fmt.Println("could not parse Content-Type:", contentType)
+		fmt.Printf("Content-Type (%v), could not parse: %v", contentType, err)
 	}
 	codec := params["codecs"]
 	fmt.Printf("Header specified: MIME = '%v', codec = '%v'\n", mimeType, codec)
@@ -144,7 +143,8 @@ func ParseFiletype(contentType, contentDisposition string) (mimeType string, ext
 	// extensions and we want to "normalize").
 	_, params, err = mime.ParseMediaType(contentDisposition)
 	if err != nil {
-		fmt.Println("could not parse Content-Disposition", contentDisposition)
+		fmt.Printf("Content-Disposition (%v), could not parse: %v",
+			contentDisposition, err)
 	}
 	origName := params["filename"]
 	fmt.Printf("Header specified: orig. name: '%v'\n", origName)
